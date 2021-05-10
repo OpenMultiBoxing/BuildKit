@@ -1,4 +1,4 @@
-copy ..\WowOpenBox\WowOpenBox.tcl OpenMultiBoxing.vfs\app\WowOpenBox.tkapp
+copy ..\OpenMultiBoxing\OpenMultiBoxing.tcl OpenMultiBoxing.vfs\app\
 tclkit\tclkit.exe  sdx/sdx.kit wrap OpenMultiBoxing -runtime runtime.exe
 del OpenMultiBoxing.exe
 rename OpenMultiBoxing OpenMultiBoxing.exe
