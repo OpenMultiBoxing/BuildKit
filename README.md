@@ -31,5 +31,7 @@ tooltip is from tklib https://core.tcl-lang.org/tklib/wiki?name=Releases
 
 tkdnd is from https://github.com/petasis/tkdnd/releases
 
+cffi 1.2.0 (win32-x86_64 dll only) is from https://sourceforge.net/projects/magicsplat/files/cffi/cffi1.2.0-bin-win.zip/download (used for DWM thumbnails, see [zoomtest.tcl](zoomtest.tcl): `runtime.exe zoomtest.tcl "title glob" srcX srcY srcW srcH scale dstX dstY clickthrough`)
+
 
 Manually added our ico to runtime.exe as sdx seems unable to otherwise replace them all
