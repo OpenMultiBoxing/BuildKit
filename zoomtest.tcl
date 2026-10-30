@@ -115,7 +115,7 @@ proc Zoom {} {
                 wm geometry .z +$::dx+$::dy
             }
             bind .z <Button-3> Select
-            bind .z <MouseWheel> {set ::scale [expr {max(0.5, $::scale * (%D > 0 ? 1.25 : 0.8))}]; Zoom}
+            bind .z <MouseWheel> {set ::scale [expr {max(0.1, $::scale * (%D > 0 ? 1.25 : 0.8))}]; Zoom}
             bind .z <Escape> exit
         }
         set hr [DwmRegisterThumbnail $dest $srcId thumb]
