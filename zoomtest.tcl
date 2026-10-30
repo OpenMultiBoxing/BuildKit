@@ -1,5 +1,5 @@
 # Spike: show a zoomed live region of another window using DWM thumbnails
-# Usage: runtime.exe zoomtest.tcl "title glob" ?scale? ?clickthrough? ?srcX srcY srcW srcH? ?dstX dstY?
+# Usage: runtime.exe zoomtest.tcl "title glob" ?scale? ?clickthrough? ?topmost? ?srcX srcY srcW srcH? ?dstX dstY?
 # Without a source rect: drag a selection rectangle over the source window (Esc cancels).
 # Zoom window (when not clickthrough): drag to move, wheel to zoom, right click to reselect, Esc to quit.
 lappend auto_path [file join [file dirname [info script]] OpenMultiBoxing.vfs lib]
@@ -23,9 +23,10 @@ user32 stdcall ClientToScreen int {hwnd ulonglong pt {struct.POINT inout}}
 
 set DWM_TNP_ALL 0x1f
 
-lassign $argv pattern scale click sx sy sw sh dx dy
+lassign $argv pattern scale click topmost sx sy sw sh dx dy
 if {$scale eq ""} {set scale 2}
 if {$click eq ""} {set click 0}
+if {$topmost eq ""} {set topmost 1}
 set src [lindex [twapi::find_windows -match glob -text $pattern -toplevel true -visible true] 0]
 if {$src eq ""} {
     tk_messageBox -icon error -message "No window matching $pattern"
@@ -84,7 +85,7 @@ proc SelectDone {x1 y1 x2 y2} {
 }
 
 proc Zoom {} {
-    global src srcId sx sy sw sh dx dy scale click thumb DWM_TNP_ALL
+    global src srcId sx sy sw sh dx dy scale click topmost thumb DWM_TNP_ALL
     if {$dx eq ""} {
         # next to the source client area
         lassign [SourceClient] x y w h
@@ -93,10 +94,13 @@ proc Zoom {} {
     }
     set dw [expr {round($sw*$scale)}]
     set dh [expr {round($sh*$scale)}]
+    # keep it on screen (e.g. full screen source)
+    set dx [expr {max(0, min($dx, [winfo screenwidth .] - $dw))}]
+    set dy [expr {max(0, min($dy, [winfo screenheight .] - $dh))}]
     if {![winfo exists .z]} {
         toplevel .z -background black
         wm overrideredirect .z 1
-        wm attributes .z -topmost 1
+        wm attributes .z -topmost $topmost
         wm geometry .z ${dw}x${dh}+$dx+$dy
         update
         set dest [expr {[wm frame .z]}]
@@ -124,7 +128,7 @@ proc Zoom {} {
             exit 1
         }
     } else {
-        wm geometry .z ${dw}x${dh}
+        wm geometry .z ${dw}x${dh}+$dx+$dy
     }
     set props [dict create dwFlags $DWM_TNP_ALL\
         rcDestination [dict create left 0 top 0 right $dw bottom $dh]\
