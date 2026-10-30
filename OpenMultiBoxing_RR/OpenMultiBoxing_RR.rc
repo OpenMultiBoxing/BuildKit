@@ -81,7 +81,7 @@ BEGIN
             VALUE "FileDescription", "OpenMultiboxing.org Round Robin Enabler"
             VALUE "FileVersion", "1.0.0.1"
             VALUE "InternalName", "OpenMult.exe"
-            VALUE "LegalCopyright", "Copyright (C) 2021-2026 MooreaTv <moorea@ymail.com>"
+            VALUE "LegalCopyright", "Copyright (C) 2020-2026 MooreaTv <moorea@ymail.com>"
             VALUE "OriginalFilename", "OpenMult.exe"
             VALUE "ProductName", "OpenMultiboxing.org Round Robin Enabler"
             VALUE "ProductVersion", "1.0.0.1"
