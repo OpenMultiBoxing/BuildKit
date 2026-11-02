@@ -5,7 +5,7 @@ name: Tcl 9 runtime
 on:
   workflow_dispatch:
   push:
-    branches: [tcl9]
+    branches: [main]
     paths: [.github/workflows/runtime9.yml, peimports.ps1]
 
 env:

@@ -17,6 +17,14 @@ Windows' own DLLs needed), with the Tcl/Tk libraries in its zip. Tcl 9's zipfs m
 and runs its `main.tcl` (no tclkit/starkit/tclvfs). `OpenMultiBoxing.vfs/lib` has the Tcl 9 packages: twapi 5.2.0
 and cffi 2.0.3 from that workflow (built against Tcl 9.0.4, stubs), tooltip 2.0.2 from tklib 0.9. No tkdnd (unused).
 
+To update them (new Tcl/Tk, twapi or cffi release):
+1. Change `TCL_TAG`, `TWAPI_TAG` or `CFFI_TAG` in `runtime9.yml` on a branch. Pushing that file to `main` also runs
+   it; otherwise Actions > "Tcl 9 runtime" > Run workflow (on the branch).
+2. `gh run download <run id> -R OpenMultiBoxing/BuildKit -n runtime9 -D out`
+3. Copy `out/runtime9.exe` here, replace `OpenMultiBoxing.vfs/lib/twapi*` and `cffi*` with `out/lib/*`. Same for
+   WowOpenBox/BuildKit, which uses these same files.
+4. Build the app and run its tests (`tests/run.sh` with `OMB_EXE` set to it), then PR.
+
 ## Signable build: runtime-zip.exe + build.ps1
 
 `build.ps1 -Out OpenMultiBoxing-vX.Y.Z.exe -Version vX.Y.Z` (with OpenMultiBoxing.tcl already in
