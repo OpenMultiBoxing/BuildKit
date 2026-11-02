@@ -1,4 +1,6 @@
 OpenMultiBoxing.exe
 OpenMultiBoxing.vfs/app/*.tkapp
+OpenMultiBoxing.vfs/app/OpenMultiBoxing.tcl
 wowopenboxSettings*.tcl
 WowOpenBox.tkapp
+WOB2027.exe

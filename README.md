@@ -9,12 +9,34 @@ Source of info and data:
 
 http://kitcreator.rkeene.org/fossil/home
 
+## Tcl/Tk 9: runtime9.exe
+
+`build.ps1` defaults to [runtime9.exe](runtime9.exe) and [app9.manifest](app9.manifest): a static
+Tcl/Tk 9.1.0 wish built by [.github/workflows/runtime9.yml](.github/workflows/runtime9.yml) (static C runtime: only
+Windows' own DLLs needed), with the Tcl/Tk libraries in its zip. Tcl 9's zipfs mounts the exe's zip at `//zipfs:/app`
+and runs its `main.tcl` (no tclkit/starkit/tclvfs). `OpenMultiBoxing.vfs/lib` has the Tcl 9 packages: twapi 5.2.0
+and cffi 2.0.3 from that workflow (built against Tcl 9.0.4, stubs), tooltip 2.0.2 from tklib 0.9. No tkdnd (unused).
+
+To update them (new Tcl/Tk, twapi or cffi release):
+1. Change `TCL_TAG`, `TWAPI_TAG` or `CFFI_TAG` in `runtime9.yml` on a branch. Pushing that file to `main` also runs
+   it; otherwise Actions > "Tcl 9 runtime" > Run workflow (on the branch).
+2. `gh run download <run id> -R OpenMultiBoxing/BuildKit -n runtime9 -D out`
+3. Copy `out/runtime9.exe` here, replace `OpenMultiBoxing.vfs/lib/twapi*` and `cffi*` with `out/lib/*`. Same for
+   WowOpenBox/BuildKit, which uses these same files.
+4. Build the app and run its tests (`tests/run.sh` with `OMB_EXE` set to it), then PR.
+
 ## Signable build: runtime-zip.exe + build.ps1
 
-`build.ps1 -Out OpenMultiBoxing-vX.Y.Z.exe -Version vX.Y.Z` (with OpenMultiBoxing.tcl already in
-`OpenMultiBoxing.vfs/app`) makes the exe from [runtime-zip.exe](runtime-zip.exe): sets our icon,
-[app.manifest](app.manifest) (high DPI) and version info (from `OpenMultiBoxing.vfs/tclkit.inf`), and appends one zip
-with the kit's files and the vfs. No sdx/mt.exe.
+Used by both OpenMultiBoxing and WowOpenBox (WOB2027):
+- `build.ps1 -Out OpenMultiBoxing-vX.Y.Z.exe -Version vX.Y.Z -Assets ..\OpenMultiBoxing\msix\Assets` (with
+  OpenMultiBoxing.tcl already in `OpenMultiBoxing.vfs/app`)
+- `build.ps1 -Out WOB2027-vX.Y.Z.exe -Version vX.Y.Z -Assets ..\WowOpenBox\msix\Assets -Inf wob.inf` (with
+  WowOpenBox.tkapp in `OpenMultiBoxing.vfs/app`)
+
+It makes the exe from the runtime (runtime9.exe, was [runtime-zip.exe](runtime-zip.exe)): sets the app's icon (made
+from its Store icons, `-Assets`), the manifest (high DPI) and version info (from [omb.inf](omb.inf) or
+[wob.inf](wob.inf)), and appends one zip with the kit's files and the vfs. No sdx/mt.exe. `main.tcl` runs the app
+script found in `app/`.
 
 Unlike the Metakit runtime.exe below, that exe still works once Authenticode signed (the signature goes after the
 VFS, at the end of the file). build.ps1 also fixes a tclvfs `zip::EndOfArchive` bug in the kit's boot code, without
