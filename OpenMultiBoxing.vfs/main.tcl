@@ -5,4 +5,7 @@ if {[package vsatisfies [package provide Tcl] 9-]} {
     package require starkit
     starkit::startup
 }
-source -encoding utf-8 [file join [file dirname [info script]] app OpenMultiBoxing.tcl]
+# the app's script: OpenMultiBoxing.tcl or WowOpenBox.tkapp (same BuildKit for both)
+set appScript [lindex [lsort [glob -nocomplain -directory [file join [file dirname [info script]] app] *.tcl *.tkapp]] 0]
+source -encoding utf-8 $appScript
+unset appScript

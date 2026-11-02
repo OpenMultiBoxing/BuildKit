@@ -1,13 +1,18 @@
 # Builds the single exe from runtime-zip.exe (KitCreator zip-storage kit) + OpenMultiBoxing.vfs, signable with
 # Authenticode (the Metakit runtime.exe + sdx wrap can't be: its VFS must end the file).
-#   build.ps1 -Out OpenMultiBoxing-v1.2.3.exe -Version v1.2.3
-# The vfs app/ must already have OpenMultiBoxing.tcl. Strings come from OpenMultiBoxing.vfs/tclkit.inf.
+#   build.ps1 -Out OpenMultiBoxing-v1.2.3.exe -Version v1.2.3 -Assets ..\OpenMultiBoxing\msix\Assets
+#   build.ps1 -Out WOB2027-v1.2.3.exe -Version v1.2.3 -Assets ..\WowOpenBox\msix\Assets -Inf wob.inf
+# The vfs app/ must already have the app's script (OpenMultiBoxing.tcl or WowOpenBox.tkapp). Version info strings
+# from -Inf (omb.inf: OMB, the default, wob.inf: WOB). The exe icon is made from the app's Store icons
+# (-Assets: Square44x44Logo.targetsize-<size>_altform-unplated.png), or -Icon for an .ico.
 param(
     [Parameter(Mandatory)][string]$Out,
     [string]$Version = 'dev',
     [string]$Runtime = "$PSScriptRoot\runtime9.exe",
     [string]$Vfs = "$PSScriptRoot\OpenMultiBoxing.vfs",
-    [string]$Icon = "$PSScriptRoot\OpenMultiBoxing_RR\OpenMultiBoxing.ico",
+    [string]$Inf = "$PSScriptRoot\omb.inf",
+    [string]$Assets,
+    [string]$Icon,
     [string]$Manifest = "$PSScriptRoot\app9.manifest"
 )
 $ErrorActionPreference = 'Stop'
@@ -150,8 +155,36 @@ public static class WobRes {
 '@
 
 # .NET resolves relative paths from the process' directory, not the PowerShell one
-$Out, $Runtime, $Vfs, $Icon, $Manifest = $Out, $Runtime, $Vfs, $Icon, $Manifest |
+$Out, $Runtime, $Vfs, $Inf, $Manifest = $Out, $Runtime, $Vfs, $Inf, $Manifest |
     ForEach-Object { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($_) }
+
+# main.tcl runs the one app script in app/
+$scripts = @(Get-ChildItem (Join-Path $Vfs app) -File | Where-Object { $_.Extension -in '.tcl', '.tkapp' })
+if ($scripts.Count -ne 1) { throw "need exactly one app script (.tcl/.tkapp) in $Vfs\app, found: $($scripts.Name -join ', ')" }
+
+# Icon: an .ico of the Store icon PNGs (PNG entries, Windows Vista+)
+if ($Icon) {
+    $iconBytes = [IO.File]::ReadAllBytes($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Icon))
+} elseif ($Assets) {
+    $pngs = Get-ChildItem $Assets -Filter 'Square44x44Logo.targetsize-*_altform-unplated.png' | ForEach-Object {
+        if ($_.Name -match 'targetsize-(\d+)_') { [pscustomobject]@{ Size = [int]$Matches[1]; Bytes = [IO.File]::ReadAllBytes($_.FullName) } }
+    } | Sort-Object Size
+    if (-not $pngs) { throw "no Square44x44Logo.targetsize-*_altform-unplated.png in $Assets" }
+    $ico = New-Object IO.MemoryStream
+    $w = New-Object IO.BinaryWriter($ico)
+    $w.Write([uint16]0); $w.Write([uint16]1); $w.Write([uint16]@($pngs).Count)
+    $offset = 6 + 16 * @($pngs).Count
+    foreach ($p in $pngs) {
+        $w.Write([byte]($p.Size % 256)); $w.Write([byte]($p.Size % 256)); $w.Write([byte]0); $w.Write([byte]0)
+        $w.Write([uint16]1); $w.Write([uint16]32); $w.Write([uint32]$p.Bytes.Length); $w.Write([uint32]$offset)
+        $offset += $p.Bytes.Length
+    }
+    foreach ($p in $pngs) { $w.Write($p.Bytes) }
+    $w.Flush()
+    $iconBytes = $ico.ToArray()
+} else {
+    throw "-Assets (the app's msix\Assets) or -Icon needed"
+}
 $bytes = [IO.File]::ReadAllBytes($Runtime)
 # The kit's zip: from its end of central directory record (last "PK\5\6")
 $eocd = -1
@@ -184,7 +217,7 @@ if ($at -lt 0 -or $stub.IndexOf($bug, $at + 1) -ge 0) {
 
 # Resources (on the exe part only: updating resources drops anything appended to an exe)
 $info = [ordered]@{}
-foreach ($l in Get-Content (Join-Path $Vfs 'tclkit.inf')) {
+foreach ($l in Get-Content $Inf) {
     if ($l -match '^\s*(\w+)\s+"(.*)"\s*$') { $info[$Matches[1]] = $Matches[2] }
 }
 $name = $info['ProductName']
@@ -194,7 +227,7 @@ $info['InternalName'] = $name
 $info['OriginalFilename'] = [IO.Path]::GetFileName($Out)
 [ushort[]]$nums = 0, 0, 0, 0
 if ($Version -match '^v?(\d+)\.(\d+)\.(\d+)') { $nums = [ushort]$Matches[1], [ushort]$Matches[2], [ushort]$Matches[3], 0 }
-[WobRes]::Apply($Out, [IO.File]::ReadAllBytes($Manifest), [IO.File]::ReadAllBytes($Icon),
+[WobRes]::Apply($Out, [IO.File]::ReadAllBytes($Manifest), $iconBytes,
     [string[]]$info.Keys, [string[]]$info.Values, $nums)
 
 # One zip: the kit's files (Tcl/Tk libraries, boot.tcl) + the vfs, appended to the exe part
