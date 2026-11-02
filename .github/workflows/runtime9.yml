@@ -109,7 +109,9 @@ jobs:
         shell: cmd
         run: |
           nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% || exit /b 1
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% install
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% install || exit /b 1
+          rem anything from tcl91.dll bypasses the stubs: not found in our static runtime
+          for /r %EXTTCLDIR%\lib %%f in (tcl9twapi*.dll) do dumpbin /nologo /imports:tcl91.dll "%%f"
 
       - name: cffi
         working-directory: cffi/win
@@ -140,6 +142,8 @@ jobs:
           $imports = & buildkit\peimports.ps1 $dlls.FullName
           $imports
           if ($imports -match 'vcruntime|msvcp|api-ms-win-crt|ucrtbase') { throw 'C runtime DLL dependency' }
+          # the runtime is static: extensions must only use Tcl/Tk through stubs
+          if ($imports -match '\b(tcl|tk)\d+t?\.dll|tommath') { throw 'Tcl/Tk DLL dependency' }
 
       - name: Smoke test
         shell: pwsh
@@ -164,6 +168,7 @@ jobs:
           if ($r -match 'ERROR') { throw 'package load failed' }
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: runtime9
           path: out
