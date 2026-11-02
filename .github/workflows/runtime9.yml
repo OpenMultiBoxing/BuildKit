@@ -13,6 +13,8 @@ env:
   TWAPI_TAG: v5.2
   CFFI_TAG: v2.0.3
   INSTALLDIR: C:\tcl9
+  # shared Tcl, only to build the extensions (stubs): against the static one they'd link Tcl in
+  EXTTCLDIR: C:\tcl9dll
 
 jobs:
   build:
@@ -31,6 +33,12 @@ jobs:
           repository: tcltk/tcl
           ref: ${{ env.TCL_TAG }}
           path: tcl
+
+      - uses: actions/checkout@v4
+        with:
+          repository: tcltk/tcl
+          ref: ${{ env.TCL_TAG }}
+          path: tcl-shared
 
       - uses: actions/checkout@v4
         with:
@@ -65,12 +73,19 @@ jobs:
           nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% release || exit /b 1
           nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% install
 
+      - name: Tcl (shared, for the extensions)
+        working-directory: tcl-shared/win
+        shell: cmd
+        run: |
+          nmake /nologo /f makefile.vc INSTALLDIR=%EXTTCLDIR% release || exit /b 1
+          nmake /nologo /f makefile.vc INSTALLDIR=%EXTTCLDIR% install
+
       - name: twapi
         working-directory: twapi/win
         shell: cmd
         run: |
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% || exit /b 1
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% install
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% install
 
       - name: cffi
         working-directory: cffi/win
@@ -78,8 +93,8 @@ jobs:
         run: |
           %VCPKG_INSTALLATION_ROOT%\vcpkg install libffi:x64-windows-static || exit /b 1
           set EXTDIR=%VCPKG_INSTALLATION_ROOT%\installed\x64-windows-static
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% EXTDIR=%EXTDIR% || exit /b 1
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% EXTDIR=%EXTDIR% install
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% install
 
       - name: Collect
         shell: pwsh
@@ -88,7 +103,7 @@ jobs:
           $wish = Get-ChildItem $env:INSTALLDIR\bin -Filter 'wish*.exe' | Where-Object Name -notmatch 'c\d' | Select-Object -First 1
           New-Item -ItemType Directory out\lib | Out-Null
           Copy-Item $wish.FullName out\runtime9.exe
-          Get-ChildItem $env:INSTALLDIR\lib -Directory | Where-Object Name -match '^(twapi|cffi)' |
+          Get-ChildItem $env:EXTTCLDIR\lib -Directory | Where-Object Name -match '^(twapi|cffi)' |
             ForEach-Object { Copy-Item -Recurse $_.FullName out\lib\ }
           # extension build options: no static libs / docs we don't need
           Get-ChildItem out -Recurse -Include *.lib, *.pdb | Remove-Item
