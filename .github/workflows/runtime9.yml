@@ -112,6 +112,7 @@ jobs:
           nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% install || exit /b 1
           rem anything from tcl91.dll bypasses the stubs: not found in our static runtime
           for /r %EXTTCLDIR%\lib %%f in (tcl9twapi*.dll) do dumpbin /nologo /imports:tcl91.dll "%%f"
+          for /r . %%f in (*.obj) do dumpbin /nologo /symbols "%%f" | findstr /c:"__imp_Tcl_" && echo ^^^ %%f
 
       - name: cffi
         working-directory: cffi/win
