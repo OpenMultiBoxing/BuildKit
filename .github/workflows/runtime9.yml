@@ -94,7 +94,8 @@ jobs:
         run: |
           %VCPKG_INSTALLATION_ROOT%\vcpkg install libffi:x64-windows-static || exit /b 1
           set EXTDIR=%VCPKG_INSTALLATION_ROOT%\installed\x64-windows-static
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% || exit /b 1
+          rem not the default target: its test dll links ucrt.lib, which fails with the static C runtime
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% cffi || exit /b 1
           nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% install
 
       - name: Collect
