@@ -9,9 +9,9 @@ Source of info and data:
 
 http://kitcreator.rkeene.org/fossil/home
 
-## Tcl/Tk 9 (tcl9 branch, experimental): runtime9.exe
+## Tcl/Tk 9: runtime9.exe
 
-`build.ps1` on this branch defaults to [runtime9.exe](runtime9.exe) and [app9.manifest](app9.manifest): a static
+`build.ps1` defaults to [runtime9.exe](runtime9.exe) and [app9.manifest](app9.manifest): a static
 Tcl/Tk 9.1.0 wish built by [.github/workflows/runtime9.yml](.github/workflows/runtime9.yml) (static C runtime: only
 Windows' own DLLs needed), with the Tcl/Tk libraries in its zip. Tcl 9's zipfs mounts the exe's zip at `//zipfs:/app`
 and runs its `main.tcl` (no tclkit/starkit/tclvfs). `OpenMultiBoxing.vfs/lib` has the Tcl 9 packages: twapi 5.2.0
