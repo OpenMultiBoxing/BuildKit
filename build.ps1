@@ -5,10 +5,10 @@
 param(
     [Parameter(Mandatory)][string]$Out,
     [string]$Version = 'dev',
-    [string]$Runtime = "$PSScriptRoot\runtime-zip.exe",
+    [string]$Runtime = "$PSScriptRoot\runtime9.exe",
     [string]$Vfs = "$PSScriptRoot\OpenMultiBoxing.vfs",
     [string]$Icon = "$PSScriptRoot\OpenMultiBoxing_RR\OpenMultiBoxing.ico",
-    [string]$Manifest = "$PSScriptRoot\app.manifest"
+    [string]$Manifest = "$PSScriptRoot\app9.manifest"
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
@@ -173,7 +173,10 @@ $bug = 'set seekstart [expr {[tell $fd] - 512}]'
 $fix = 'set seekstart [expr {[tell $fd] -$len}]'
 $at = $stub.IndexOf($bug)
 if ($at -lt 0 -or $stub.IndexOf($bug, $at + 1) -ge 0) {
-    if ($stub.IndexOf($fix) -lt 0) { throw "zip::EndOfArchive code to fix not found once in $Runtime" }
+    # Tcl 9 runtime: zipfs, no tclvfs code
+    if ($stub.IndexOf($fix) -lt 0 -and $stub.IndexOf('zip::EndOfArchive') -ge 0) {
+        throw "zip::EndOfArchive code to fix not found once in $Runtime"
+    }
 } else {
     $stub = $stub.Substring(0, $at) + $fix + $stub.Substring($at + $bug.Length)
 }
