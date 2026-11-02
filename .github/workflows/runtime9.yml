@@ -11,7 +11,8 @@ on:
 env:
   TCL_TAG: core-9-1-0
   TWAPI_TAG: v5.2
-  CFFI_TAG: v2.0.3
+  # 2.0.4 (unreleased): Tcl 9.1 fix
+  CFFI_TAG: 8d62a2a2aad93f15736b7c3b223624a4e8ee5efb
   INSTALLDIR: C:\tcl9
   # shared Tcl, only to build the extensions (stubs): against the static one they'd link Tcl in
   EXTTCLDIR: C:\tcl9dll
