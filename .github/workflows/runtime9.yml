@@ -29,19 +29,31 @@ jobs:
         with:
           path: buildkit
 
-      - uses: actions/checkout@v4
+      # Tcl/Tk builds only (saved before the extensions install into EXTTCLDIR)
+      - id: tclcache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            C:\tcl9
+            C:\tcl9dll
+          key: tcl-${{ env.TCL_TAG }}-static-nomsvcrt-shared-v1
+
+      - if: steps.tclcache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
         with:
           repository: tcltk/tcl
           ref: ${{ env.TCL_TAG }}
           path: tcl
 
-      - uses: actions/checkout@v4
+      - if: steps.tclcache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
         with:
           repository: tcltk/tcl
           ref: ${{ env.TCL_TAG }}
           path: tcl-shared
 
-      - uses: actions/checkout@v4
+      - if: steps.tclcache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
         with:
           repository: tcltk/tk
           ref: ${{ env.TCL_TAG }}
@@ -61,6 +73,7 @@ jobs:
           submodules: true
 
       - name: Tcl
+        if: steps.tclcache.outputs.cache-hit != 'true'
         working-directory: tcl/win
         shell: cmd
         run: |
@@ -68,6 +81,7 @@ jobs:
           nmake /nologo /f makefile.vc OPTS=static,nomsvcrt INSTALLDIR=%INSTALLDIR% install
 
       - name: Tk
+        if: steps.tclcache.outputs.cache-hit != 'true'
         working-directory: tk/win
         shell: cmd
         run: |
@@ -75,11 +89,20 @@ jobs:
           nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% install
 
       - name: Tcl (shared, for the extensions)
+        if: steps.tclcache.outputs.cache-hit != 'true'
         working-directory: tcl-shared/win
         shell: cmd
         run: |
           nmake /nologo /f makefile.vc INSTALLDIR=%EXTTCLDIR% release || exit /b 1
           nmake /nologo /f makefile.vc INSTALLDIR=%EXTTCLDIR% install
+
+      - if: steps.tclcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            C:\tcl9
+            C:\tcl9dll
+          key: ${{ steps.tclcache.outputs.cache-primary-key }}
 
       - name: twapi
         working-directory: twapi/win
@@ -94,9 +117,8 @@ jobs:
         run: |
           %VCPKG_INSTALLATION_ROOT%\vcpkg install libffi:x64-windows-static || exit /b 1
           set EXTDIR=%VCPKG_INSTALLATION_ROOT%\installed\x64-windows-static
-          rem not the default target: its test dll links ucrt.lib, which fails with the static C runtime
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% cffi || exit /b 1
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% install
+          rem not the default/cffi target: its test dll links ucrt.lib, which fails with the static C runtime
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% setup pkgindex install
 
       - name: Collect
         shell: pwsh
