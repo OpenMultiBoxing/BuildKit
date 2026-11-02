@@ -1,0 +1,130 @@
+# Builds the Tcl/Tk 9 runtime: a static wish (Tcl+Tk and their script libraries in its zip) and the binary
+# extensions we use (twapi, cffi), all with the static C runtime so nothing beyond Windows' own DLLs is needed.
+name: Tcl 9 runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tcl9]
+    paths: [.github/workflows/runtime9.yml, peimports.ps1]
+
+env:
+  TCL_TAG: core-9-1-0
+  TWAPI_TAG: v5.2
+  CFFI_TAG: v2.0.3
+  INSTALLDIR: C:\tcl9
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - uses: actions/checkout@v4
+        with:
+          path: buildkit
+
+      - uses: actions/checkout@v4
+        with:
+          repository: tcltk/tcl
+          ref: ${{ env.TCL_TAG }}
+          path: tcl
+
+      - uses: actions/checkout@v4
+        with:
+          repository: tcltk/tk
+          ref: ${{ env.TCL_TAG }}
+          path: tk
+
+      - uses: actions/checkout@v4
+        with:
+          repository: apnadkarni/twapi
+          ref: ${{ env.TWAPI_TAG }}
+          path: twapi
+
+      - uses: actions/checkout@v4
+        with:
+          repository: apnadkarni/tcl-cffi
+          ref: ${{ env.CFFI_TAG }}
+          path: cffi
+          submodules: true
+
+      - name: Tcl
+        working-directory: tcl/win
+        shell: cmd
+        run: |
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt INSTALLDIR=%INSTALLDIR% release || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt INSTALLDIR=%INSTALLDIR% install
+
+      - name: Tk
+        working-directory: tk/win
+        shell: cmd
+        run: |
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% release || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% install
+
+      - name: twapi
+        working-directory: twapi/win
+        shell: cmd
+        run: |
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% install
+
+      - name: cffi
+        working-directory: cffi/win
+        shell: cmd
+        run: |
+          %VCPKG_INSTALLATION_ROOT%\vcpkg install libffi:x64-windows-static || exit /b 1
+          set EXTDIR=%VCPKG_INSTALLATION_ROOT%\installed\x64-windows-static
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% EXTDIR=%EXTDIR% || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%INSTALLDIR% EXTDIR=%EXTDIR% install
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          Get-ChildItem $env:INSTALLDIR\bin, $env:INSTALLDIR\lib | Format-Table -AutoSize Name, Length
+          $wish = Get-ChildItem $env:INSTALLDIR\bin -Filter 'wish*.exe' | Where-Object Name -notmatch 'c\d' | Select-Object -First 1
+          New-Item -ItemType Directory out\lib | Out-Null
+          Copy-Item $wish.FullName out\runtime9.exe
+          Get-ChildItem $env:INSTALLDIR\lib -Directory | Where-Object Name -match '^(twapi|cffi)' |
+            ForEach-Object { Copy-Item -Recurse $_.FullName out\lib\ }
+          # extension build options: no static libs / docs we don't need
+          Get-ChildItem out -Recurse -Include *.lib, *.pdb | Remove-Item
+          Get-ChildItem out -Recurse -File | Format-Table -AutoSize FullName, Length
+
+      - name: No C runtime DLLs needed
+        shell: pwsh
+        run: |
+          $dlls = Get-ChildItem out -Recurse -Include *.exe, *.dll
+          $imports = & buildkit\peimports.ps1 $dlls.FullName
+          $imports
+          if ($imports -match 'vcruntime|msvcp|api-ms-win-crt|ucrtbase') { throw 'C runtime DLL dependency' }
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          @'
+          set f [open [file join [file dirname [info script]] smoke.txt] w]
+          lappend auto_path [file join [file dirname [info script]] lib]
+          foreach p {Tcl Tk twapi twapi_crypto cffi} {
+              if {[catch {package require $p} v]} { set v "ERROR $v" }
+              puts $f "$p $v"
+          }
+          puts $f "tcl_library $tcl_library"
+          puts $f "tk_library $tk_library"
+          puts $f "nameofexecutable [info nameofexecutable]"
+          close $f
+          exit
+          '@ | Set-Content -Encoding utf8 out\smoke.tcl
+          Start-Process -Wait -FilePath out\runtime9.exe -ArgumentList "$PWD\out\smoke.tcl"
+          $r = Get-Content out\smoke.txt
+          $r
+          Remove-Item out\smoke.tcl, out\smoke.txt
+          if ($r -match 'ERROR') { throw 'package load failed' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime9
+          path: out
