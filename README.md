@@ -14,8 +14,11 @@ http://kitcreator.rkeene.org/fossil/home
 `build.ps1` defaults to [runtime9.exe](runtime9.exe) and [app9.manifest](app9.manifest): a static
 Tcl/Tk 9.1.0 wish built by [.github/workflows/runtime9.yml](.github/workflows/runtime9.yml) (static C runtime: only
 Windows' own DLLs needed), with the Tcl/Tk libraries in its zip. Tcl 9's zipfs mounts the exe's zip at `//zipfs:/app`
-and runs its `main.tcl` (no tclkit/starkit/tclvfs). `OpenMultiBoxing.vfs/lib` has the Tcl 9 packages: twapi 5.2.0
-and cffi 2.0.3 from that workflow (built against Tcl 9.0.4, stubs), tooltip 2.0.2 from tklib 0.9. No tkdnd (unused).
+and runs its `main.tcl` (no tclkit/starkit/tclvfs). twapi 5.2.0 and cffi 2.0.3 are linked into runtime9.exe as
+static packages (built against Tcl 9.0.4, stubs; registered by [runtime9/appinit.c](runtime9/appinit.c)): no DLL,
+which Tcl would copy from the exe's zip to `%TEMP%` to load it (unsigned there, blocked by Smart App Control, and
+the copies' folders were never cleaned up). `OpenMultiBoxing.vfs/lib` has their scripts (cffi's `pkgIndex.tcl`
+made by the workflow: `load {} Cffi`) and tooltip 2.0.2 from tklib 0.9. No tkdnd (unused).
 
 To update them (new Tcl/Tk, twapi or cffi release):
 1. Change `TCL_TAG`, `TWAPI_TAG` or `CFFI_TAG` in `runtime9.yml` on a branch. Pushing that file to `main` also runs

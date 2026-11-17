@@ -7,9 +7,9 @@ package ifneeded twapi_base 5.2.0 \
         package require platform
         set packageVer [string map {. {}} 5.2.0]
         if {[package vsatisfies [package require Tcl] 9]} {
-            set baseDllName "tcl9twapi520.dll"
+            set baseDllName "tcl9twapi520sx.lib"
         } else {
-            set baseDllName "twapi520t.dll"
+            set baseDllName "twapi520tsx.lib"
         }
         set package "twapi"
         set package_ns ::$package

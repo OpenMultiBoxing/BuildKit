@@ -1,12 +1,14 @@
-# Builds the Tcl/Tk 9 runtime: a static wish (Tcl+Tk and their script libraries in its zip) and the binary
-# extensions we use (twapi, cffi), all with the static C runtime so nothing beyond Windows' own DLLs is needed.
+# Builds the Tcl/Tk 9 runtime: a static wish (Tcl+Tk and their script libraries in its zip) with the binary
+# extensions we use (twapi, cffi) linked in as static packages (no DLL: Tcl would copy one from the exe's zip to
+# %TEMP% to load it, and Smart App Control blocks such unsigned DLLs), all with the static C runtime so nothing
+# beyond Windows' own DLLs is needed. lib/ only has the extensions' scripts.
 name: Tcl 9 runtime
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [.github/workflows/runtime9.yml, peimports.ps1]
+    paths: [.github/workflows/runtime9.yml, peimports.ps1, runtime9/**]
 
 env:
   TCL_TAG: core-9-1-0
@@ -38,7 +40,7 @@ jobs:
           path: |
             C:\tcl9
             C:\tcl9dll
-          key: tcl-${{ env.TCL_TAG }}-static-nomsvcrt-${{ env.EXT_TCL_TAG }}-shared-v1
+          key: tcl-${{ env.TCL_TAG }}-static-nomsvcrt-${{ env.EXT_TCL_TAG }}-shared-v2
 
       - if: steps.tclcache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
@@ -90,6 +92,17 @@ jobs:
           nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% release || exit /b 1
           nmake /nologo /f makefile.vc OPTS=static,nomsvcrt TCLDIR=%GITHUB_WORKSPACE%\tcl INSTALLDIR=%INSTALLDIR% install
 
+      # to relink wish with the extensions: its sources, resources (icon, manifest, version) and Tcl+Tk library zip
+      - name: Keep wish's parts
+        if: steps.tclcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $d = New-Item -ItemType Directory "$env:INSTALLDIR\wishparts"
+          $build = Get-ChildItem tk\win -Directory -Filter 'Release_AMD64*'
+          Get-ChildItem $build.FullName -Recurse -Include wish.res, wish.zip | Copy-Item -Destination $d
+          Copy-Item tk\win\winMain.c $d
+          Get-ChildItem $d
+
       - name: Tcl (shared, for the extensions)
         if: steps.tclcache.outputs.cache-hit != 'true'
         working-directory: tcl-shared/win
@@ -110,8 +123,10 @@ jobs:
         working-directory: twapi/win
         shell: cmd
         run: |
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% || exit /b 1
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% install
+          rem static library (still through stubs), no DllMain/dllexport
+          set CL=/DTWAPI_STATIC_BUILD
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt INSTALLDIR=%EXTTCLDIR% || exit /b 1
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt INSTALLDIR=%EXTTCLDIR% install
 
       - name: cffi
         working-directory: cffi/win
@@ -120,20 +135,65 @@ jobs:
           %VCPKG_INSTALLATION_ROOT%\vcpkg install libffi:x64-windows-static || exit /b 1
           set EXTDIR=%VCPKG_INSTALLATION_ROOT%\installed\x64-windows-static
           rem not the default/cffi target: its test dll links ucrt.lib, which fails with the static C runtime
-          nmake /nologo /f makefile.vc OPTS=nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% setup pkgindex install
+          nmake /nologo /f makefile.vc OPTS=static,nomsvcrt INSTALLDIR=%EXTTCLDIR% EXTDIR=%EXTDIR% setup pkgindex install
+
+      # wish (winMain.c) with our app init registering the extensions, linked with their static libraries
+      - name: Link wish with the extensions
+        shell: pwsh
+        run: |
+          $parts = "$env:INSTALLDIR\wishparts"
+          Get-ChildItem $env:INSTALLDIR\lib -File | Format-Table -AutoSize Name, Length
+          Get-ChildItem $env:EXTTCLDIR\lib -Recurse -Filter *.lib | Format-Table -AutoSize FullName, Length
+          function One($dir, $pattern) {
+            $f = @(Get-ChildItem $dir -Recurse -File | Where-Object Name -match $pattern)
+            if ($f.Count -ne 1) { throw "expected one $pattern in $dir, got: $($f.Name)" }
+            $f[0].FullName
+          }
+          $libs = @(
+            (One "$env:INSTALLDIR\lib" '^(tcl9)?tk\d+s\w*\.lib$'),
+            (One "$env:INSTALLDIR\lib" '^tcl\d+s\w*\.lib$'),
+            (One "$env:INSTALLDIR\lib" '^tclstub\w*\.lib$'),
+            (One "$env:EXTTCLDIR\lib" '^tcl9twapi.*\.lib$'),
+            (One "$env:EXTTCLDIR\lib" '^tcl9cffi.*\.lib$')
+          )
+          $libs += Get-ChildItem twapi\dyncall\dyncall-0.9\lib\release_amd64 -Filter *.lib | ForEach-Object FullName
+          $libs += One "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static\lib" '^(lib)?ffi\.lib$'
+          $libs
+          $sys = 'kernel32 user32 gdi32 advapi32 shell32 ole32 oleaut32 uuid comctl32 comdlg32 imm32 oleacc msimg32 usp10 winspool netapi32 ws2_32 userenv dwmapi uxtheme cfgmgr32 credui crypt32 iphlpapi mpr pdh powrprof psapi rpcrt4 secur32 setupapi shlwapi version winmm wintrust wtsapi32'.Split(' ') | ForEach-Object { "$_.lib" }
+          New-Item -ItemType Directory wishobj | Out-Null
+          $cflags = '/nologo', '/c', '/O2', '/MT', '/DSTATIC_BUILD', '/DUNICODE', '/D_UNICODE', "/I$env:INSTALLDIR\include"
+          cl @cflags /DTK_LOCAL_APPINIT=OmbAppInit /Fowishobj\winMain.obj "$parts\winMain.c"
+          if ($LASTEXITCODE) { throw 'winMain.c' }
+          cl @cflags /Fowishobj\appinit.obj buildkit\runtime9\appinit.c
+          if ($LASTEXITCODE) { throw 'appinit.c' }
+          link /nologo /subsystem:windows /stack:2300000 /out:wishobj\wish.exe wishobj\winMain.obj wishobj\appinit.obj "$parts\wish.res" @libs @sys
+          if ($LASTEXITCODE) { throw 'link' }
+          # like Tk's makefile: the Tcl+Tk library zip appended to the exe
+          New-Item -ItemType Directory out\lib | Out-Null
+          cmd /c copy /b "wishobj\wish.exe+$parts\wish.zip" out\runtime9.exe
+          if ($LASTEXITCODE) { throw 'zip' }
 
       - name: Collect
         shell: pwsh
         run: |
-          Get-ChildItem $env:INSTALLDIR\bin, $env:INSTALLDIR\lib | Format-Table -AutoSize Name, Length
-          $wish = Get-ChildItem $env:INSTALLDIR\bin -Filter 'wish*.exe' | Where-Object Name -notmatch 'c\d' | Select-Object -First 1
-          New-Item -ItemType Directory out\lib | Out-Null
-          Copy-Item $wish.FullName out\runtime9.exe
           Get-ChildItem $env:EXTTCLDIR\lib -Directory | Where-Object Name -match '^(twapi|cffi)' |
             ForEach-Object { Copy-Item -Recurse $_.FullName out\lib\ }
-          # extension build options: no static libs / docs we don't need
+          # static libraries (linked in) and docs we don't need
           Get-ChildItem out -Recurse -Include *.lib, *.pdb | Remove-Item
+          Get-ChildItem out\lib -Recurse -Directory | Where-Object { -not (Get-ChildItem $_.FullName) } | Remove-Item
+          # twapi's pkgIndex.tcl does `load {} Twapi` without its DLL, cffi's needs one: ours
+          $cffi = Get-ChildItem out\lib -Directory -Filter 'cffi*'
+          $v = $cffi.Name -replace '^cffi', ''
+          @"
+          # cffi linked into the runtime as a static package (made by runtime9.yml)
+          package ifneeded cffi $v [list apply {{dir} {
+              load {} Cffi
+              set ::cffi::dll_path {}
+              set ::cffi::package_dir `$dir
+          }} `$dir]
+          "@ | Set-Content -Encoding utf8 "$($cffi.FullName)\pkgIndex.tcl"
           Get-ChildItem out -Recurse -File | Format-Table -AutoSize FullName, Length
+          if (Get-ChildItem out -Recurse -Filter *.dll) { throw 'DLL left' }
 
       - name: No C runtime DLLs needed
         shell: pwsh
@@ -158,6 +218,13 @@ jobs:
           puts $f "tcl_library $tcl_library"
           puts $f "tk_library $tk_library"
           puts $f "nameofexecutable [info nameofexecutable]"
+          # static packages: loaded from no file
+          puts $f "loaded [info loaded]"
+          if {[lsearch -index 0 -not [info loaded] {}] >= 0} { puts $f "ERROR loaded from a file" }
+          if {[catch {twapi::get_current_process_id} v] || $v != [pid]} { set v "ERROR $v" }
+          puts $f "twapi call $v"
+          if {[catch {cffi::Wrapper create ::k32 [file join $env(windir) system32 kernel32.dll]; ::k32 function GetCurrentProcessId uint {}; GetCurrentProcessId} v] || $v != [pid]} { set v "ERROR $v" }
+          puts $f "cffi call $v"
           close $f
           exit
           '@ | Set-Content -Encoding utf8 out\smoke.tcl
