@@ -150,7 +150,7 @@ jobs:
             $f[0].FullName
           }
           $libs = @(
-            (One "$env:INSTALLDIR\lib" '^tk\d+s\w*\.lib$'),
+            (One "$env:INSTALLDIR\lib" '^(tcl9)?tk\d+s\w*\.lib$'),
             (One "$env:INSTALLDIR\lib" '^tcl\d+s\w*\.lib$'),
             (One "$env:INSTALLDIR\lib" '^tclstub\w*\.lib$'),
             (One "$env:EXTTCLDIR\lib" '^tcl9twapi.*\.lib$'),
