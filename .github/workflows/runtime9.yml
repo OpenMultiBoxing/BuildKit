@@ -221,9 +221,9 @@ jobs:
           # static packages: loaded from no file
           puts $f "loaded [info loaded]"
           if {[lsearch -index 0 -not [info loaded] {}] >= 0} { puts $f "ERROR loaded from a file" }
-          if {[catch {twapi::get_process_ids -pid [pid]} v]} { set v "ERROR $v" }
+          if {[catch {twapi::get_current_process_id} v] || $v != [pid]} { set v "ERROR $v" }
           puts $f "twapi call $v"
-          if {[catch {cffi::Wrapper create ::k32 [file join $env(windir) system32 kernel32.dll]; ::k32 function GetCurrentProcessId uint32 {}; GetCurrentProcessId} v]} { set v "ERROR $v" }
+          if {[catch {cffi::Wrapper create ::k32 [file join $env(windir) system32 kernel32.dll]; ::k32 function GetCurrentProcessId uint {}; GetCurrentProcessId} v] || $v != [pid]} { set v "ERROR $v" }
           puts $f "cffi call $v"
           close $f
           exit
