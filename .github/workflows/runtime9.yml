@@ -159,7 +159,7 @@ jobs:
           $libs += Get-ChildItem twapi\dyncall\dyncall-0.9\lib\release_amd64 -Filter *.lib | ForEach-Object FullName
           $libs += One "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static\lib" '^(lib)?ffi\.lib$'
           $libs
-          $sys = 'kernel32 user32 gdi32 advapi32 shell32 ole32 oleaut32 uuid comctl32 comdlg32 imm32 winspool netapi32 ws2_32 userenv dwmapi uxtheme cfgmgr32 credui crypt32 iphlpapi mpr pdh powrprof psapi rpcrt4 secur32 setupapi shlwapi version winmm wintrust wtsapi32'.Split(' ') | ForEach-Object { "$_.lib" }
+          $sys = 'kernel32 user32 gdi32 advapi32 shell32 ole32 oleaut32 uuid comctl32 comdlg32 imm32 oleacc msimg32 usp10 winspool netapi32 ws2_32 userenv dwmapi uxtheme cfgmgr32 credui crypt32 iphlpapi mpr pdh powrprof psapi rpcrt4 secur32 setupapi shlwapi version winmm wintrust wtsapi32'.Split(' ') | ForEach-Object { "$_.lib" }
           New-Item -ItemType Directory wishobj | Out-Null
           $cflags = '/nologo', '/c', '/O2', '/MT', '/DSTATIC_BUILD', '/DUNICODE', '/D_UNICODE', "/I$env:INSTALLDIR\include"
           cl @cflags /DTK_LOCAL_APPINIT=OmbAppInit /Fowishobj\winMain.obj "$parts\winMain.c"
